@@ -26,38 +26,50 @@ def showImgs(imgs, n_imgs, i_imgs):
       plt.imshow(imgs[i], cmap='gray')
       plt.axis('off')
       p += 1
+   plt.show()
 
 faces = fetch_olivetti_faces()
 images = faces.images
-images.shape
+print(images.shape)
 
-# features = faces.data  # features
-# targets = faces.target # targets
-# showImgs(images, 100, range(100))
+features = faces.data  # features
+targets = faces.target # targets
+#showImgs(images, 100, range(100))
 
 query_img1 = images[71]
-# print('the target of this face is :', targets[71])
+print('the target of this face is :', targets[71])
 # showImgs([query_img1], 1, [0])
+# showImgs(query_img1, 10, range(10))
 
-query_γ1 = query_img1.reshape(-1)
-Γ = np.array([I.reshape(-1) for I in images])
-Σ_Γi = np.zeros(4096)
-for Γi in Γ:
-   Σ_Γi += Γi
-   Ψ = (1/400)* Σ_Γi
-#showImgs([Ψ.reshape(64,64)], 1, [0])
+query_lambda1 = query_img1.reshape(-1)
+r = np.array([I.reshape(-1) for I in images])
+tot_r = np.zeros(4096)
+for ri in r:
+   tot_r += ri
+   g = (1/400)* tot_r
+#showImgs([g.reshape(64,64)], 1, [0])
 
-φ1 = query_γ1 - Ψ
-Φ = np.array([I - Ψ for I in Γ])
-Φ.shape
+phi1 = query_lambda1 - g
+phi = np.array([I - g for I in r])
+print("phi.shape", phi.shape)
 
 # Using the PCA algorithm
 pca = PCA(svd_solver='full')
+
 pca.fit(faces["data"])
+
+print("pca.components_.shape", pca.components_.shape)
+print("images.shape:", images.shape)
+
+# print(coord.shape) #pourquoi ça ne marche pas
+
 # These lines just for showing the images in (64, 64)format
 best_eigenfaces = []
-for eigenface in pca.components_[0 : 40]:
+for eigenface in pca.components_[0 : 42]:
    best_eigenfaces.append(eigenface.reshape(64, 64))
-showImgs(best_eigenfaces, 40, range(40))
+showImgs(best_eigenfaces, 42, range(42))
 
-plt.show()
+best_eigenfaces = pca.components_[0 : 40]
+print("best_eigenfaces.shape : ", best_eigenfaces.shape)
+
+# plt.show()
