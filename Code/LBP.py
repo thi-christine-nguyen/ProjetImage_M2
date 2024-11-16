@@ -1,8 +1,6 @@
 import os
 import cv2
 
-import zipfile
-
 import numpy as np
 
 from PIL import Image
@@ -26,7 +24,7 @@ def get_image_data() :
     return np.array(ids),faces
 ids , faces = get_image_data()
 # Initialize LBPH (Local Binary Pattern Histogram(lbp))  face recognizer object using OpenCV's computer vision library
-lbph_classifier = cv2.faces.LBPHFaceRecognizer_create()
+lbph_classifier = cv2.face.LBPHFaceRecognizer_create()
 
 # Train the LBPH classifier using the provided face images (faces) and corresponding labels (ids)
 lbph_classifier.train(faces,ids)
@@ -46,7 +44,7 @@ image = Image.open(test_image).convert('L')
 image_np = np.array(image,'uint8')
 
 # Before giving the image to the model, let's visualize it first
-cv2.imshow(image_np)
+cv2.imshow("image", image_np)
 # Using the trained model to predict identity of the person in the test image
 predictions = lbph_face_classifier.predict(image_np)
 print(predictions)
@@ -59,4 +57,5 @@ print(expected_output)
 cv2.putText(image_np, 'Pred.' +str(predictions[0]),(10,30),cv2.FONT_HERSHEY_COMPLEX_SMALL,1,(0,255,0))
 cv2.putText(image_np, 'Expec.' +str(expected_output),(10,50),cv2.FONT_HERSHEY_COMPLEX_SMALL,1,(0,255,0)
 )
-cv2.imshow(image_np)
+cv2.imshow("image", image_np)
+cv2.waitKey(0)
