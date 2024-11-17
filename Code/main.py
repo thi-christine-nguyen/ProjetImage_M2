@@ -21,7 +21,7 @@ import dlib
 detector = dlib.get_frontal_face_detector()
 
 # Découpage d'image avec dlib
-def auto_crop_image(image):
+def dlib_cut(image):
     if image is not None:
         im = image.copy()
         
@@ -62,6 +62,44 @@ def auto_crop_image(image):
                 print(f"Found {len(faces)} faces!")
                 return crpim, image, (x, y, w, h)
     return None, image, (0, 0, 0, 0)
+
+
+def haar(image):
+    if image is not None:
+        im = image.copy()
+        # Load HaarCascade from the file with OpenCV
+        faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+        
+        # Read the image
+        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        
+        # Detect faces in the image
+        faces = faceCascade.detectMultiScale(
+            gray,
+            scaleFactor=1.1,
+            minNeighbors=5,
+            minSize=(30, 30)
+        )
+        faces = faceCascade.detectMultiScale(gray, 1.2, 5)
+        
+        if len(faces) > 0:
+            # Draw a rectangle around the faces
+            for (x, y, w, h) in faces:
+                cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 2)        
+            (x, y, w, h) = faces[0]
+            center_x = x+w/2
+            center_y = y+h/2
+            height, width, channels = im.shape
+            b_dim = min(max(w,h)*1.2,width, height)
+            box = [center_x-b_dim/2, center_y-b_dim/2, center_x+b_dim/2, center_y+b_dim/2]
+            box = [int(x) for x in box]
+            # Crop Image
+            if box[0] >= 0 and box[1] >= 0 and box[2] <= width and box[3] <= height:
+                crpim = im[box[1]:box[3],box[0]:box[2]]
+                crpim = cv2.resize(crpim, (224,224), interpolation = cv2.INTER_AREA)
+                print("Found {0} faces!".format(len(faces)))
+                return crpim, image, (x, y, w, h)
+    return None, image, (0,0,0,0)
 
 # Création du CNN
 def convblock(cdim, nb, bits=3):
@@ -121,7 +159,7 @@ def copy_mat_to_keras(kmodel):
             kmodel.layers[kindex].set_weights([f_l_weights, l_bias[:,0]])
 
 
-def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_folder="CroppedImages"):
+def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_folder="CroppedImagesDlib"):
     database = {}
     
     # Créer le dossier pour enregistrer les images découpées si nécessaire
@@ -144,7 +182,7 @@ def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_
                         img = cv2.imread(img_path)
                         
                         # Recadrage automatique de l'image
-                        crpim, srcimg, (x, y, w, h) = auto_crop_image(img)
+                        crpim, srcimg, (x, y, w, h) = dlib_cut(img)
                         
                         if crpim is not None:
                             # Enregistrer l'image recadrée si nécessaire
@@ -205,7 +243,7 @@ def main(database):
         
         # Ne traiter que chaque 10e frame
         if frame_counter % 10 == 0:
-            imgcrop, img, (x, y, w, h) = auto_crop_image(frame)
+            imgcrop, img, (x, y, w, h) = haar(frame)
             
             if ready_to_detect_identity and imgcrop is not None:
                 # Empêcher une nouvelle détection pendant une identification en cours
