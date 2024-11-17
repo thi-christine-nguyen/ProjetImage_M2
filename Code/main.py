@@ -12,13 +12,24 @@ from scipy.io import loadmat
 
 import os
 from multiprocessing.dummy import Pool
-#Bonus :
-from threading import Thread
-import win32com.client 
+
+import time
 
 import dlib
 
 detector = dlib.get_frontal_face_detector()
+
+# Découpage d'image avec dlib
+import dlib
+import cv2
+
+# Charger le détecteur de visages et le prédicteur de landmarks
+detector = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+
+# Charger le détecteur de visages et le prédicteur de landmarks
+detector = dlib.get_frontal_face_detector()
+predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
 # Découpage d'image avec dlib
 def dlib_cut(image):
@@ -32,10 +43,20 @@ def dlib_cut(image):
         faces = detector(gray)
         
         if len(faces) > 0:
-            # Dessiner un rectangle autour des visages
+            # Dessiner un rectangle autour des visages et afficher les landmarks
             for face in faces:
                 x, y, x2, y2 = face.left(), face.top(), face.right(), face.bottom()
+                # Dessiner un rectangle autour du visage
                 cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
+                
+                # Extraire les landmarks pour chaque visage détecté
+                landmarks = predictor(gray, face)
+                
+                # Dessiner les points de landmarks
+                for i in range(0, 68):  # 68 points de landmarks
+                    x_landmark = landmarks.part(i).x
+                    y_landmark = landmarks.part(i).y
+                    cv2.circle(image, (x_landmark, y_landmark), 1, (255, 0, 0), -1)
             
             # Prendre le premier visage détecté
             first_face = faces[0]
@@ -46,60 +67,72 @@ def dlib_cut(image):
             center_x = x + w / 2
             center_y = y + h / 2
             height, width, channels = im.shape
-            b_dim = min(max(w, h) * 1.2, width, height)  # Ajustement pour inclure un peu de contexte
-            box = [
-                int(center_x - b_dim / 2),
-                int(center_y - b_dim / 2),
-                int(center_x + b_dim / 2),
-                int(center_y + b_dim / 2)
-            ]
             
-            # Vérifier que le cadre reste dans les limites de l'image
-            if box[0] >= 0 and box[1] >= 0 and box[2] <= width and box[3] <= height:
-                crpim = im[box[1]:box[3], box[0]:box[2]]
-                # Redimensionner à 224x224 pour un traitement uniforme
-                crpim = cv2.resize(crpim, (224, 224), interpolation=cv2.INTER_AREA)
-                print(f"Found {len(faces)} faces!")
-                return crpim, image, (x, y, w, h)
+            # Ajustement pour inclure du contexte autour du visage
+            margin = 0.4  # Marge contextuelle (40% des dimensions du visage)
+            box_w = w * (1 + margin)
+            box_h = h * (1 + margin)
+            box_dim = min(box_w, box_h, width, height)  # Limiter la taille à l'image
+            
+            # Calculer les coordonnées du cadre centré
+            x_start = max(0, int(center_x - box_dim / 2))
+            y_start = max(0, int(center_y - box_dim / 2))
+            x_end = min(width, int(center_x + box_dim / 2))
+            y_end = min(height, int(center_y + box_dim / 2))
+            
+            # Découper et redimensionner l'image
+            crpim = im[y_start:y_end, x_start:x_end]
+            crpim = cv2.resize(crpim, (224, 224), interpolation=cv2.INTER_AREA)
+            
+            # Retourner l'image découpée, l'image annotée et les dimensions du visage
+            print(f"Found {len(faces)} faces!")
+            return crpim, image, (x, y, w, h)
+    
+    # Si aucun visage n'est détecté, retourner l'image originale
     return None, image, (0, 0, 0, 0)
 
 
 def haar(image):
     if image is not None:
-        im = image.copy()
-        # Load HaarCascade from the file with OpenCV
-        faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
-        
-        # Read the image
+        # Load HaarCascade from the file with OpenCV only once (outside of the function)
+        if not hasattr(haar, 'faceCascade'):
+            haar.faceCascade = cv2.CascadeClassifier("haarcascade_frontalface_default.xml")
+
+        # Convert to grayscale once
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         
-        # Detect faces in the image
-        faces = faceCascade.detectMultiScale(
+        # Detect faces in the image using optimized scaleFactor and minNeighbors
+        faces = haar.faceCascade.detectMultiScale(
             gray,
             scaleFactor=1.1,
-            minNeighbors=5,
+            minNeighbors=4,  # Reduced minNeighbors for faster detection
             minSize=(30, 30)
         )
-        faces = faceCascade.detectMultiScale(gray, 1.2, 5)
-        
+
         if len(faces) > 0:
-            # Draw a rectangle around the faces
+            # Draw rectangle only if faces are detected
             for (x, y, w, h) in faces:
-                cv2.rectangle(image, (x, y), (x+w, y+h), (0, 255, 0), 2)        
+                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Only process the first face for cropping and resizing
             (x, y, w, h) = faces[0]
-            center_x = x+w/2
-            center_y = y+h/2
-            height, width, channels = im.shape
-            b_dim = min(max(w,h)*1.2,width, height)
-            box = [center_x-b_dim/2, center_y-b_dim/2, center_x+b_dim/2, center_y+b_dim/2]
-            box = [int(x) for x in box]
-            # Crop Image
+            center_x = x + w // 2
+            center_y = y + h // 2
+            height, width, _ = image.shape
+
+            # Calculate bounding box with some padding
+            b_dim = min(max(w, h) * 1.2, width, height)
+            box = [center_x - b_dim // 2, center_y - b_dim // 2, center_x + b_dim // 2, center_y + b_dim // 2]
+            box = [int(coord) for coord in box]
+
+            # Crop and resize image if within bounds
             if box[0] >= 0 and box[1] >= 0 and box[2] <= width and box[3] <= height:
-                crpim = im[box[1]:box[3],box[0]:box[2]]
-                crpim = cv2.resize(crpim, (224,224), interpolation = cv2.INTER_AREA)
-                print("Found {0} faces!".format(len(faces)))
+                crpim = image[box[1]:box[3], box[0]:box[2]]
+                crpim = cv2.resize(crpim, (224, 224), interpolation=cv2.INTER_AREA)
+                print(f"Found {len(faces)} faces!")
                 return crpim, image, (x, y, w, h)
-    return None, image, (0,0,0,0)
+
+    return None, image, (0, 0, 0, 0)
 
 # Création du CNN
 def convblock(cdim, nb, bits=3):
@@ -159,7 +192,11 @@ def copy_mat_to_keras(kmodel):
             kmodel.layers[kindex].set_weights([f_l_weights, l_bias[:,0]])
 
 
+
 def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_folder="CroppedImagesDlib"):
+    # Démarrer le chronomètre
+    start_time = time.time()
+    
     database = {}
     
     # Créer le dossier pour enregistrer les images découpées si nécessaire
@@ -192,6 +229,7 @@ def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_
                             
                             # Extraction des caractéristiques de l'image avec le modèle
                             vector_image = crpim[None, ...]
+                            # Envoi de l'image au CNN
                             person_vector = featuremodel.predict(vector_image)[0, :]
                             
                             # Ajout du vecteur à la base de données
@@ -200,6 +238,15 @@ def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_
                             database[person_folder].append(person_vector)
                 except Exception as e:
                     print(f"Erreur avec l'image {img_path}: {e}")
+    
+    # Calculer le temps écoulé
+    elapsed_time = time.time() - start_time
+    print(f"Temps écoulé pour générer la base de données : {elapsed_time:.2f} secondes.")
+
+    # for person, vectors in database.items():
+    #     print(f"Nom : {person}")
+    #     for i, vector in enumerate(vectors):
+    #         print(f"  Vecteur {i + 1} : {vector}")
     
     return database
 
@@ -228,6 +275,9 @@ def find_closest(img, database, min_detection=2.5):
     
     return umin, dmin
 
+def recognize_image(imgcrop, database):
+    name, dmin = find_closest(imgcrop, database)
+    return name, True
 
 def main(database):
     cv2.namedWindow("preview")
@@ -265,9 +315,7 @@ def main(database):
     
     cv2.destroyWindow("preview")
 
-def recognize_image(imgcrop, database):
-    name, dmin = find_closest(imgcrop, database)
-    return name, True
+
 
 facemodel = vgg_face_blank()
 data = loadmat('vgg-face.mat', matlab_compatible=False, struct_as_record=False)
@@ -280,3 +328,43 @@ featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[
 db = generate_database()
 
 main(db)
+
+# # Test fonction angle
+# # Charger une image
+# image_path = "CroppedImagesDlib/Thi_24.jpg"  # Remplacez par le chemin de votre image
+# image = cv2.imread(image_path)
+
+# # Vérifier si l'image a été correctement chargée
+# if image is None:
+#     print("Erreur : Impossible de charger l'image.")
+# else:
+#     # Appliquer le découpage d'image pour détecter et recadrer le visage
+#     cropped_image, annotated_image, face_dimensions = dlib_cut(image)
+    
+#     if cropped_image is not None:
+#         # Charger ou créer votre base de données
+#         database = generate_database(folder_img="FaceDataBase")
+        
+#         # Effectuer la reconnaissance faciale
+#         recognized_name, is_recognized = recognize_image(cropped_image, database)
+        
+#         if is_recognized:
+#             # Ajouter le texte sur l'image annotée
+#             font = cv2.FONT_HERSHEY_SIMPLEX
+#             font_scale = 1
+#             color = (255, 0, 0)  # Couleur bleue pour le texte
+#             thickness = 2
+#             position = (10, 30)  # Position du texte
+            
+#             # Ajouter le texte (nom reconnu) sur l'image annotée
+#             cv2.putText(annotated_image, recognized_name, position, font, font_scale, color, thickness, cv2.LINE_AA)
+#             print(f"Visage reconnu : {recognized_name}")
+#         else:
+#             print("Aucun visage correspondant trouvé dans la base de données.")
+        
+#         # Afficher l'image annotée avec le texte ajouté
+#         cv2.imshow("Image Annotée avec Nom", annotated_image)
+#         cv2.waitKey(0)
+#         cv2.destroyAllWindows()
+#     else:
+#         print("Aucun visage détecté dans l'image.")
