@@ -18,17 +18,6 @@ import time
 import dlib
 
 detector = dlib.get_frontal_face_detector()
-
-# Découpage d'image avec dlib
-import dlib
-import cv2
-
-# Charger le détecteur de visages et le prédicteur de landmarks
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
-
-# Charger le détecteur de visages et le prédicteur de landmarks
-detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
 # Découpage d'image avec dlib
@@ -47,7 +36,7 @@ def dlib_cut(image):
             for face in faces:
                 x, y, x2, y2 = face.left(), face.top(), face.right(), face.bottom()
                 # Dessiner un rectangle autour du visage
-                cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
+                # cv2.rectangle(image, (x, y), (x2, y2), (0, 255, 0), 2)
                 
                 # Extraire les landmarks pour chaque visage détecté
                 landmarks = predictor(gray, face)
@@ -110,9 +99,9 @@ def haar(image):
         )
 
         if len(faces) > 0:
-            # Draw rectangle only if faces are detected
-            for (x, y, w, h) in faces:
-                cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            # # Draw rectangle only if faces are detected
+            # for (x, y, w, h) in faces:
+            #     cv2.rectangle(image, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
             # Only process the first face for cropping and resizing
             (x, y, w, h) = faces[0]
