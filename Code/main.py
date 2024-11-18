@@ -15,17 +15,10 @@ from multiprocessing.dummy import Pool
 
 import time
 
-import dlib
-
-detector = dlib.get_frontal_face_detector()
-
 # Découpage d'image avec dlib
 import dlib
-import cv2
 
-# Charger le détecteur de visages et le prédicteur de landmarks
-detector = dlib.get_frontal_face_detector()
-predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
+import pickle
 
 # Charger le détecteur de visages et le prédicteur de landmarks
 detector = dlib.get_frontal_face_detector()
@@ -291,10 +284,14 @@ def main(database):
         img = frame
         frame_counter += 1
         
+        totaltime = 0
+        nbtests = 0
         # Ne traiter que chaque 10e frame
         if frame_counter % 10 == 0:
-            imgcrop, img, (x, y, w, h) = haar(frame)
-            
+            start_time = time.time()
+            imgcrop, img, (x, y, w, h) = dlib_cut(frame)
+            totaltime += time.time() - start_time
+            nbtests +=1
             if ready_to_detect_identity and imgcrop is not None:
                 # Empêcher une nouvelle détection pendant une identification en cours
                 ready_to_detect_identity = False
@@ -311,11 +308,22 @@ def main(database):
             cv2.imshow("preview", img)
 
             if key == 27: # quitter avec la touche ESC
+                print("mean time: ", totaltime/nbtests)
                 break
     
     cv2.destroyWindow("preview")
 
 
+def save_database(db, filename='face_database.pkl'):
+    with open(filename, 'wb') as f:
+        pickle.dump(db, f)
+    print(f"Base de données sauvegardée dans {filename}")
+
+def load_database(filename='face_database.pkl'):
+    with open(filename, 'rb') as f:
+        db = pickle.load(f)
+    print(f"Base de données chargée depuis {filename}")
+    return db
 
 facemodel = vgg_face_blank()
 data = loadmat('vgg-face.mat', matlab_compatible=False, struct_as_record=False)
@@ -325,8 +333,8 @@ description = data['meta'][0,0].classes[0,0].description
 copy_mat_to_keras(facemodel)
 featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[-2].output)
 
-db = generate_database()
-
+# db = generate_database("../Database/FaceDataBase",False)
+db=load_database("db.pkl")
 main(db)
 
 # # Test fonction angle
