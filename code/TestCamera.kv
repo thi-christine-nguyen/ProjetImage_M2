@@ -1,8 +1,9 @@
 BoxLayout:
    orientation: 'vertical'
-   Camera:
-      id: camera
-      play: False
+   canvas:
+      Rectangle:
+         pos: self.center_x - 5, 0
+         size: 10, self.height
    ToggleButton:
       text: 'Play'
       on_press: camera.play = not camera.play
