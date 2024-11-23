@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+from keras.models import load_model
 from keras.models import Sequential, Model
 from keras.layers import Flatten, Dropout, Activation, Permute
 from keras.layers import Convolution2D, MaxPooling2D
@@ -274,34 +275,75 @@ def main(database):
     ready_to_detect_identity = True
     name = ""
     frame_counter = 0
-    
+    cpt = 0
+    last_detected_position = None  # Pour stocker la dernière position détectée
+    current_name = None  # Variable pour garder le nom actuel même si la détection ne change pas
+
     while vc.isOpened():
         _, frame = vc.read()
-        img = frame
-        frame_counter += 1
-        
-        # Ne traiter que chaque 10e frame
-        if frame_counter % 10 == 0:
-            imgcrop, img, (x, y, w, h) = haar(frame)
-            
-            if ready_to_detect_identity and imgcrop is not None:
-                # Empêcher une nouvelle détection pendant une identification en cours
-                ready_to_detect_identity = False
-                
-                # Utilisation du pool pour la détection de l'identité
-                pool = Pool(processes=1)
-                name, ready_to_detect_identity = pool.apply_async(recognize_image, [imgcrop, database]).get()
-                pool.close()
-                
-                # Affichage du nom de la personne identifiée
-                cv2.putText(img = frame, text = name, org = (int(x),int(y+h+20)), fontFace = cv2.FONT_HERSHEY_SIMPLEX, thickness=2, fontScale=1, color=(0, 255, 0))
-            
-            key = cv2.waitKey(100)
-            cv2.imshow("preview", img)
+        cpt += 1
 
-            if key == 27: # quitter avec la touche ESC
-                break
-    
+        # Ne traiter qu'une frame sur 10 pour améliorer les performances
+        if cpt >= 5:
+            cpt = 0
+            img = frame
+
+            # Recadrer automatiquement l'image et détecter le visage
+            imgcrop, img, (x, y, w, h) = dlib_cut(img)
+
+            if imgcrop is not None:
+                # Vérifier si un visage est détecté à proximité du précédent
+                if last_detected_position:
+                    last_x, last_y, last_w, last_h = last_detected_position
+                    movement_threshold = 50  # Seuil en pixels pour considérer une "téléportation"
+
+                    if abs(x - last_x) > movement_threshold or abs(y - last_y) > movement_threshold:
+                        print("Mouvement trop important, redétection complète...")
+                        last_detected_position = (x, y, w, h)
+                    else:
+                        print("Visage suivi : Position similaire au précédent.")
+                else:
+                    last_detected_position = (x, y, w, h)
+
+                # Si prêt à détecter une nouvelle identité
+                if ready_to_detect_identity:
+                    ready_to_detect_identity = False
+
+                    # Utilisation d'un thread pour l'identification
+                    pool = Pool(processes=1)
+                    current_name, ready_to_detect_identity = pool.apply_async(recognize_image, [imgcrop, database]).get()
+                    pool.close()
+
+                # Si un nom est détecté, garder l'affichage de ce nom
+                if current_name:
+                    name = current_name  # Mettre à jour le nom actuel
+                    cv2.putText(
+                        img=frame, text=name, org=(int(x), int(y + h + 20)),
+                        fontFace=cv2.FONT_HERSHEY_SIMPLEX, thickness=2,
+                        fontScale=1, color=(0, 255, 0)
+                    )
+                    # Dessiner un rectangle autour du visage
+                    cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            else:
+                print("Aucun visage détecté sur cette frame.")
+                name = ""
+
+        if name:
+            cv2.putText(
+                img=frame, text=name, org=(int(x), int(y + h + 20)),
+                fontFace=cv2.FONT_HERSHEY_SIMPLEX, thickness=2,
+                fontScale=1, color=(0, 255, 0)
+            )
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+
+        # Affichage et gestion des événements de la fenêtre
+        cv2.imshow("preview", frame)
+        key = cv2.waitKey(1)
+        if key == 27:  # Quitter avec la touche ESC
+            break
+
     cv2.destroyWindow("preview")
 
 
@@ -314,6 +356,7 @@ description = data['meta'][0,0].classes[0,0].description
 copy_mat_to_keras(facemodel)
 featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[-2].output)
 
+# featuremodel = get_feature_model()
 db = generate_database()
 
 main(db)
