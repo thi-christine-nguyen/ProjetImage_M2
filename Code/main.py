@@ -15,7 +15,7 @@ import os
 from multiprocessing.dummy import Pool
 
 import time
-
+import pickle
 import dlib
 
 detector = dlib.get_frontal_face_detector()
@@ -181,7 +181,20 @@ def copy_mat_to_keras(kmodel):
             assert (len(kmodel.layers[kindex].get_weights()) == 2)
             kmodel.layers[kindex].set_weights([f_l_weights, l_bias[:,0]])
 
+def save_database(database, file_path="database.pkl"):
+    with open(file_path, "wb") as f:
+        pickle.dump(database, f)
+    print(f"Base de données sauvegardée dans {file_path}")
 
+def load_database(file_path="database.pkl"):
+    try:
+        with open(file_path, "rb") as f:
+            database = pickle.load(f)
+        print(f"Base de données chargée depuis {file_path}")
+        return database
+    except FileNotFoundError:
+        print(f"Aucune base de données trouvée à {file_path}.")
+        return {}
 
 def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_folder="CroppedImagesDlib"):
     # Démarrer le chronomètre
@@ -320,12 +333,12 @@ def main(database):
         cpt += 1
 
         # Ne traiter qu'une frame sur 10 pour améliorer les performances
-        if cpt >= 5:
+        if cpt >= 10:
             cpt = 0
             img = frame
 
             # Recadrer automatiquement l'image et détecter le visage
-            imgcrop, img, (x, y, w, h) = haar(img)
+            imgcrop, img, (x, y, w, h) = dlib_cut(img)
 
             if imgcrop is not None:
                 # Vérifier si un visage est détecté à proximité du précédent
@@ -398,7 +411,16 @@ copy_mat_to_keras(facemodel)
 featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[-2].output)
 
 # featuremodel = get_feature_model()
-db = generate_database()
+# db = generate_database()
+database_path = "database.pkl"
+db = load_database(database_path)
+
+# Si la base de données est vide, la générer
+if not db:
+    db = generate_database()
+    # Sauvegarder la base de données générée
+    save_database(db, database_path)
+
 
 main(db)
 
