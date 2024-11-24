@@ -1,0 +1,12 @@
+Dlib Pierre : 
+MAE (différence moyenne absolue) : 40.8270
+
+Haar Pierre : 
+MAE (différence moyenne absolue) : 62.7189
+
+
+Dlib Thi
+MAE (différence moyenne absolue) : 57.4474
+
+Haar Thi
+MAE (différence moyenne absolue) : 113.4198
