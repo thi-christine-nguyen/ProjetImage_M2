@@ -42,11 +42,11 @@ def dlib_cut(image):
                 # Extraire les landmarks pour chaque visage détecté
                 landmarks = predictor(gray, face)
                 
-                # Dessiner les points de landmarks
-                for i in range(0, 68):  # 68 points de landmarks
-                    x_landmark = landmarks.part(i).x
-                    y_landmark = landmarks.part(i).y
-                    cv2.circle(image, (x_landmark, y_landmark), 1, (255, 0, 0), -1)
+                # # Dessiner les points de landmarks
+                # for i in range(0, 68):  # 68 points de landmarks
+                #     x_landmark = landmarks.part(i).x
+                #     y_landmark = landmarks.part(i).y
+                #     cv2.circle(image, (x_landmark, y_landmark), 1, (255, 0, 0), -1)
             
             # Prendre le premier visage détecté
             first_face = faces[0]
@@ -265,9 +265,44 @@ def find_closest(img, database, min_detection=2.5):
     
     return umin, dmin
 
+# def find_closest(img, database, min_detection=2.5):
+#     imarr1 = np.asarray(img)
+#     imarr1 = imarr1[None, ...]  # Ajouter une dimension pour le batch
+    
+#     # Prédiction du vecteur de caractéristiques de l'image
+#     fvec1 = featuremodel.predict(imarr1)[0, :]
+    
+#     # Normaliser le vecteur de caractéristiques (si vous utilisez la distance euclidienne)
+#     fvec1 = fvec1 / np.linalg.norm(fvec1)
+    
+#     # Recherche de la personne la plus proche dans la base de données
+#     dmin = float('inf')
+#     umin = ""
+    
+#     for person, vectors in database.items():
+#         for fvec2 in vectors:
+#             # Normaliser fvec2
+#             fvec2 = fvec2 / np.linalg.norm(fvec2)
+            
+#             # Calcul de la distance euclidienne entre fvec1 et fvec2
+#             dist = np.linalg.norm(fvec1 - fvec2)
+            
+#             if dist < dmin:
+#                 dmin = dist
+#                 umin = person
+    
+#     # Si la distance minimale est supérieure à un seuil, retourner une personne inconnue
+#     if dmin > min_detection:
+#         umin = ""
+    
+#     return umin, dmin
+
+
 def recognize_image(imgcrop, database):
     name, dmin = find_closest(imgcrop, database)
+    print(name)
     return name, True
+
 
 def main(database):
     cv2.namedWindow("preview")
@@ -278,6 +313,7 @@ def main(database):
     cpt = 0
     last_detected_position = None  # Pour stocker la dernière position détectée
     current_name = None  # Variable pour garder le nom actuel même si la détection ne change pas
+    prev_time = time.time()
 
     while vc.isOpened():
         _, frame = vc.read()
@@ -289,7 +325,7 @@ def main(database):
             img = frame
 
             # Recadrer automatiquement l'image et détecter le visage
-            imgcrop, img, (x, y, w, h) = dlib_cut(img)
+            imgcrop, img, (x, y, w, h) = haar(img)
 
             if imgcrop is not None:
                 # Vérifier si un visage est détecté à proximité du précédent
@@ -336,8 +372,13 @@ def main(database):
                 fontScale=1, color=(0, 255, 0)
             )
             cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        
+        # current_time = time.time()
+        # fps = 1 / (current_time - prev_time)
+        # prev_time = current_time
+        # print(fps)
 
-
+      
         # Affichage et gestion des événements de la fenêtre
         cv2.imshow("preview", frame)
         key = cv2.waitKey(1)
@@ -363,7 +404,7 @@ main(db)
 
 # # Test fonction angle
 # # Charger une image
-# image_path = "CroppedImagesDlib/Thi_24.jpg"  # Remplacez par le chemin de votre image
+# image_path = "FaceDataBase/Thi/24.jpg"  # Remplacez par le chemin de votre image
 # image = cv2.imread(image_path)
 
 # # Vérifier si l'image a été correctement chargée
@@ -396,7 +437,7 @@ main(db)
         
 #         # Afficher l'image annotée avec le texte ajouté
 #         cv2.imshow("Image Annotée avec Nom", annotated_image)
-#         cv2.waitKey(0)
+#         cv2.waitKey(1)
 #         cv2.destroyAllWindows()
 #     else:
 #         print("Aucun visage détecté dans l'image.")
