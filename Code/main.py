@@ -422,9 +422,9 @@ if not db:
     save_database(db, database_path)
 
 
-main(db)
+# main(db)
 
-# # Test fonction angle
+# Test fonction angle
 # # Charger une image
 # image_path = "FaceDataBase/Thi/24.jpg"  # Remplacez par le chemin de votre image
 # image = cv2.imread(image_path)
@@ -463,3 +463,72 @@ main(db)
 #         cv2.destroyAllWindows()
 #     else:
 #         print("Aucun visage détecté dans l'image.")
+
+
+
+def process_test_folder(test_folder, output_folder, database_folder):
+    # Charger ou créer votre base de données
+    database = generate_database(folder_img=database_folder)
+    
+    # Dossier pour les images non reconnues
+    unknown_folder = os.path.join(output_folder, "Autres")
+    os.makedirs(unknown_folder, exist_ok=True)
+    
+    # Parcourir toutes les images du dossier Test
+    for file_name in os.listdir(test_folder):
+        image_path = os.path.join(test_folder, file_name)
+        
+        # Vérifier si le fichier est une image
+        if not file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
+            continue
+        
+        image = cv2.imread(image_path)
+
+        # Vérifier si l'image a été correctement chargée
+        if image is None:
+            print(f"Erreur : Impossible de charger l'image {file_name}.")
+            continue
+        
+        # Appliquer le découpage d'image pour détecter et recadrer le visage
+        cropped_image, annotated_image, face_dimensions = dlib_cut(image)
+        
+        if cropped_image is not None:
+            # Effectuer la reconnaissance faciale
+            recognized_name, is_recognized = recognize_image(cropped_image, database)
+            
+            if is_recognized:
+                # Créer le dossier pour la personne reconnue s'il n'existe pas
+                person_folder = os.path.join(output_folder, recognized_name)
+                os.makedirs(person_folder, exist_ok=True)
+                
+                # Ajouter le texte (nom reconnu) sur l'image annotée
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 1
+                color = (255, 0, 0)  # Couleur bleue pour le texte
+                thickness = 2
+                position = (10, 30)  # Position du texte
+                cv2.putText(annotated_image, recognized_name, position, font, font_scale, color, thickness, cv2.LINE_AA)
+                
+                # Sauvegarder l'image annotée dans le dossier de la personne reconnue
+                output_path = os.path.join(person_folder, file_name)
+                cv2.imwrite(output_path, annotated_image)
+                
+                print(f"Visage reconnu : {recognized_name}, image sauvegardée dans {output_path}")
+            else:
+                # Enregistrer l'image non reconnue dans le dossier "Autres"
+                output_path = os.path.join(unknown_folder, file_name)
+                cv2.imwrite(output_path, image)
+                print(f"Aucun visage correspondant trouvé pour {file_name}, image sauvegardée dans 'Autres'.")
+        else:
+            # Enregistrer l'image non analysable dans le dossier "Autres"
+            output_path = os.path.join(unknown_folder, file_name)
+            cv2.imwrite(output_path, image)
+            print(f"Aucun visage détecté dans {file_name}, image sauvegardée dans 'Autres'.")
+
+# Configuration des dossiers
+test_folder = "Test"  # Dossier contenant les images à tester
+output_folder = "RecognizedFaces"  # Dossier de sortie pour les images reconnues
+database_folder = "FaceDataBase"  # Dossier contenant la base de données des visages
+
+# Appel de la fonction principale
+process_test_folder(test_folder, output_folder, database_folder)
