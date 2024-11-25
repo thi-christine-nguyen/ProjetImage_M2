@@ -6,6 +6,7 @@ from kivy.core.window import Window
 from kivy.uix.widget import Widget
 from kivy.graphics import Color, Rectangle
 from kivy.graphics.texture import Texture
+from kivy.graphics import opengl
 from kivy.clock import Clock
 from kivy.utils import platform
 
@@ -41,7 +42,6 @@ class TestCameraApp(App):
             pixels = texture.pixels
             pil_image=Image.frombytes(mode='RGBA', size=size,data=pixels)
 
-
             if platform == 'android':
                 pil_image=pil_image.rotate(90, expand=True)
                 texture = Texture.create(size=(texture.size[1], texture.size[0]), colorfmt='rgba')
@@ -55,9 +55,11 @@ class TestCameraApp(App):
             # numpypicture=numpy.array(pil_image)
             # print(numpypicture.shape)
             # print(format(numpypicture))
+            self.w.canvas.clear()
             with self.w.canvas:
                 Color(1, 1, 1)
                 Rectangle(texture = texture, size=(800,800))
+
 
     def play(self, instance):
         if instance.state=='down':
