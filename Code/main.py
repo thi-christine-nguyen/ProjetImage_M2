@@ -255,38 +255,12 @@ def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_
 
 
 # Fonction pour trouver la personne la plus proche en utilisant la base de données
-def find_closest(img, database, min_detection=2.5):
-    imarr1 = np.asarray(img)
-    imarr1 = imarr1[None, ...]
-    
-    # Prédiction du vecteur de caractéristiques de l'image
-    fvec1 = featuremodel.predict(imarr1)[0, :]
-    
-    # Recherche de la personne la plus proche dans la base de données
-    dmin = float('inf')
-    umin = ""
-    
-    for person, vectors in database.items():
-        for fvec2 in vectors:
-            dcos_1_2 = dcos(fvec1, fvec2)
-            if dcos_1_2 < dmin:
-                dmin = dcos_1_2
-                umin = person
-    
-    if dmin > min_detection:
-        umin = ""
-    
-    return umin, dmin
-
 # def find_closest(img, database, min_detection=2.5):
 #     imarr1 = np.asarray(img)
-#     imarr1 = imarr1[None, ...]  # Ajouter une dimension pour le batch
+#     imarr1 = imarr1[None, ...]
     
 #     # Prédiction du vecteur de caractéristiques de l'image
 #     fvec1 = featuremodel.predict(imarr1)[0, :]
-    
-#     # Normaliser le vecteur de caractéristiques (si vous utilisez la distance euclidienne)
-#     fvec1 = fvec1 / np.linalg.norm(fvec1)
     
 #     # Recherche de la personne la plus proche dans la base de données
 #     dmin = float('inf')
@@ -294,21 +268,47 @@ def find_closest(img, database, min_detection=2.5):
     
 #     for person, vectors in database.items():
 #         for fvec2 in vectors:
-#             # Normaliser fvec2
-#             fvec2 = fvec2 / np.linalg.norm(fvec2)
-            
-#             # Calcul de la distance euclidienne entre fvec1 et fvec2
-#             dist = np.linalg.norm(fvec1 - fvec2)
-            
-#             if dist < dmin:
-#                 dmin = dist
+#             dcos_1_2 = dcos(fvec1, fvec2)
+#             if dcos_1_2 < dmin:
+#                 dmin = dcos_1_2
 #                 umin = person
     
-#     # Si la distance minimale est supérieure à un seuil, retourner une personne inconnue
 #     if dmin > min_detection:
 #         umin = ""
     
 #     return umin, dmin
+
+def find_closest(img, database, min_detection=2.5):
+    imarr1 = np.asarray(img)
+    imarr1 = imarr1[None, ...]  # Ajouter une dimension pour le batch
+    
+    # Prédiction du vecteur de caractéristiques de l'image
+    fvec1 = featuremodel.predict(imarr1)[0, :]
+    
+    # Normaliser le vecteur de caractéristiques (si vous utilisez la distance euclidienne)
+    fvec1 = fvec1 / np.linalg.norm(fvec1)
+    
+    # Recherche de la personne la plus proche dans la base de données
+    dmin = float('inf')
+    umin = ""
+    
+    for person, vectors in database.items():
+        for fvec2 in vectors:
+            # Normaliser fvec2
+            fvec2 = fvec2 / np.linalg.norm(fvec2)
+            
+            # Calcul de la distance euclidienne entre fvec1 et fvec2
+            dist = np.linalg.norm(fvec1 - fvec2)
+            
+            if dist < dmin:
+                dmin = dist
+                umin = person
+    
+    # Si la distance minimale est supérieure à un seuil, retourner une personne inconnue
+    if dmin > min_detection:
+        umin = ""
+    
+    return umin, dmin
 
 
 def recognize_image(imgcrop, database):
