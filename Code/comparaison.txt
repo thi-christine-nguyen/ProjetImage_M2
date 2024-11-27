@@ -10,3 +10,15 @@ MAE (différence moyenne absolue) : 57.4474
 
 Haar Thi
 MAE (différence moyenne absolue) : 113.4198
+
+
+Pour angle et pour distance on a la même chose
+Pour 1 image par personne avec une banque de test de 69 images. 
+Pour 14 personnes, on a une reconnaissance avec Dlib de 41/69 environ 40%
+
+
+
+Pour 2 image par personne avec une banque de test de 69 images. 
+Pour 14 personnes, on a une reconnaissance avec Dlib de 51/69.
+
+On a tout de même remarque que le choix des images de références était assez important, en effet, parfois même avec 2 images par personnes selon les images, nos résutlat peuvent passer de 51/69 à 46/69. 
