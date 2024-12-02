@@ -1,27 +1,35 @@
-# -*- coding: utf-8 -*-
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.button import Button
+from kivy.uix.slider import Slider
+from kivy.uix.label import Label
+from kivy.uix.widget import Widget
+from kivy.clock import Clock
+import cv2
+from kivy.graphics.texture import Texture
+from kivy.uix.image import Image
+
+import numpy as np
+import dlib
 from keras.models import load_model
 from keras.models import Sequential, Model
 from keras.layers import Flatten, Dropout, Activation, Permute
 from keras.layers import Convolution2D, MaxPooling2D
 from keras import backend as K
 K.set_image_data_format( 'channels_last' )
-
-import numpy as np
-import cv2
 from scipy.spatial.distance import cosine as dcos
 from scipy.io import loadmat
-
-import os
-from multiprocessing.dummy import Pool
-
-import time
 import pickle
-import dlib
 
+# Variables globales
+current_method = "dlib_cut"
+detection_threshold = 0.3
+
+# Initialisation des modèles Dlib
 detector = dlib.get_frontal_face_detector()
 predictor = dlib.shape_predictor("shape_predictor_68_face_landmarks.dat")
 
-# Découpage d'image avec dlib
+
 def dlib_cut(image):
     if image is not None:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
@@ -270,56 +278,97 @@ def recognize_image(imgcrop, database):
     print(name)
     return name, True
 
-def on_change(val : int):
-    print(val)
 
-def main(database):
-    cv2.namedWindow("preview")
-    vc = cv2.VideoCapture(0)
-    cpt = 0  # Compteur pour ajuster la fréquence de traitement
-    detected_faces = []  # Stocker les visages détectés pour éviter de répéter la reconnaissance
+# Classe principale pour Kivy
+class MainApp(App):
+    def build(self):
+        # Layout principal
+        layout = BoxLayout(orientation="vertical")
 
-    while vc.isOpened():
-        _, frame = vc.read()
-        cpt += 1
+        # Layouts secondaires
+        imageLayout = BoxLayout(orientation="horizontal")
+        buttonLayout = BoxLayout(orientation="vertical", size_hint=(0.2,1))
+        tresholdLayout = BoxLayout(orientation="vertical", size_hint=(1,0.1))
 
-        # Traitement des visages une frame sur 10
-        if cpt >= 10:
-            cpt = 0
-            img = frame.copy()
+        # Affichage vidéo
+        self.video = Image()
 
-            # Détection des visages
-            faces, _ = dlib_cut(img) 
-            # faces, _ = haar(img) 
-            detected_faces = []
+        # Boutons pour choisir la méthode
+        btn_dlib = Button(text="Dlib Cut", on_press=lambda x: self.set_method("dlib_cut"))
+        btn_haar = Button(text="Haar Cascade", on_press=lambda x: self.set_method("haar"))
 
-            for cropped_face, (x, y, w, h) in faces:
-                # Reconnaissance de la personne (à faire moins souvent)
-                name, _ = recognize_image(cropped_face, database)
-                detected_faces.append((name, x, y, w, h))
+        # Curseur pour ajuster le seuil
+        self.threshold_label = Label(text=f"Seuil: {detection_threshold:.2f}")
+        self.threshold_slider = Slider(min=0.1, max=1.0, value=detection_threshold, step=0.01)
+        self.threshold_slider.bind(value=self.update_threshold)
 
-        # Afficher les résultats
-        for name, x, y, w, h in detected_faces:
-            # Afficher le nom au-dessus du visage
-            cv2.putText(
-                img=frame, text=name, org=(x, y - 10),
-                fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7,
-                color=(0, 255, 0), thickness=2
-            )
-            # Dessiner un rectangle autour du visage
-            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+        # Ajouter les widgets dans les layouts
+        tresholdLayout.add_widget(self.threshold_label)
+        tresholdLayout.add_widget(self.threshold_slider)
 
-        # Affichage en temps réel
-        cv2.imshow("preview", frame)
+        buttonLayout.add_widget(btn_dlib)
+        buttonLayout.add_widget(btn_haar)
 
-        # Gestion des événements clavier
-        key = cv2.waitKey(1)
-        if key == 27:  # Quitter avec la touche ESC
-            break
+        imageLayout.add_widget(buttonLayout)
+        imageLayout.add_widget(self.video)
 
-    vc.release()
-    cv2.destroyAllWindows()
+        # Ajouter les sous-layouts dans le layout principal
+        layout.add_widget(imageLayout)
+        layout.add_widget(tresholdLayout)
 
+        # Lancer le flux vidéo
+        self.capture = cv2.VideoCapture(0)
+        Clock.schedule_interval(self.update_frame, 1.0 / 30.0)
+        self.frame_counter =0
+        self.detected_faces = []
+
+        return layout
+
+    def set_method(self, method):
+        global current_method
+        current_method = method
+
+    def update_threshold(self, instance, value):
+        global detection_threshold
+        detection_threshold = value
+        self.threshold_label.text = f"Seuil: {value:.2f}"
+
+    def update_frame(self, dt):
+        ret, frame = self.capture.read()
+        if ret:
+            frame = cv2.flip(frame, 1)  # Miroir pour une meilleure expérience utilisateur
+            self.frame_counter += 1
+
+            if self.frame_counter >= 10:
+                self.frame_counter = 0  # Réinitialiser le compteur
+
+                # Réaliser le traitement des visages toutes les 10 frames
+                if current_method == "dlib_cut":
+                    faces, _ = dlib_cut(frame)
+                elif current_method == "haar":
+                    faces, _ = haar(frame)
+                else:
+                    faces = []
+
+                self.detected_faces = faces  # Mettre à jour les visages détectés
+
+            # Annoter les résultats à chaque frame avec les données précédemment détectées
+            for cropped_face, (x, y, w, h) in self.detected_faces:
+                name, _ = recognize_image(cropped_face, db)
+                cv2.putText(frame, name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
+                cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+
+            # Convertir l'image pour Kivy
+            buf = cv2.flip(frame, 0).tobytes()
+            texture = Texture.create(size=(frame.shape[1], frame.shape[0]), colorfmt="bgr")
+            texture.blit_buffer(buf, colorfmt="bgr", bufferfmt="ubyte")
+            self.video.texture = texture
+
+    def on_stop(self):
+        self.capture.release()
+
+
+# Initialisation des modèles et base de données
 
 facemodel = vgg_face_blank()
 data = loadmat('vgg-face.mat', matlab_compatible=False, struct_as_record=False)
@@ -341,114 +390,6 @@ if not db:
     save_database(db, database_path)
 
 
-main(db)
-
-# # Test fonction angle
-# # Charger une image
-# image_path = "Test/69.jpg"  # Remplacez par le chemin de votre image
-# image = cv2.imread(image_path)
-
-# # Vérifier si l'image a été correctement chargée
-# if image is None:
-#     print("Erreur : Impossible de charger l'image.")
-# else:
-#     # Appliquer le découpage d'image pour détecter et recadrer le visage
-#     cropped_image, annotated_image, face_dimensions = dlib_cut(image)
-    
-#     if cropped_image is not None:
-#         # Charger ou créer votre base de données
-#         database = generate_database(folder_img="FaceDataBase")
-        
-#         # Effectuer la reconnaissance faciale
-#         recognized_name, is_recognized = recognize_image(cropped_image, database)
-        
-#         if is_recognized:
-#             # Ajouter le texte sur l'image annotée
-#             font = cv2.FONT_HERSHEY_SIMPLEX
-#             font_scale = 1
-#             color = (255, 0, 0)  # Couleur bleue pour le texte
-#             thickness = 2
-#             position = (10, 30)  # Position du texte
-            
-#             # Ajouter le texte (nom reconnu) sur l'image annotée
-#             cv2.putText(annotated_image, recognized_name, position, font, font_scale, color, thickness, cv2.LINE_AA)
-#             print(f"Visage reconnu : {recognized_name}")
-#         else:
-#             print("Aucun visage correspondant trouvé dans la base de données.")
-        
-#         # Afficher l'image annotée avec le texte ajouté
-#         cv2.imshow("Image Annotée avec Nom", annotated_image)
-#         cv2.waitKey(1)
-#         cv2.destroyAllWindows()
-#     else:
-#         print("Aucun visage détecté dans l'image.")
-
-
-# def process_test_folder(test_folder, output_folder, database_folder):
-#     # Charger ou créer votre base de données
-#     database = generate_database(folder_img=database_folder)
-
-#     # Dossier pour les images non reconnues
-#     unknown_folder = os.path.join(output_folder, "Pas de visage")
-#     os.makedirs(unknown_folder, exist_ok=True)
-
-#     # Parcourir toutes les images du dossier Test
-#     for file_name in os.listdir(test_folder):
-#         image_path = os.path.join(test_folder, file_name)
-
-#         # Vérifier si le fichier est une image
-#         if not file_name.lower().endswith(('.png', '.jpg', '.jpeg')):
-#             continue
-
-#         image = cv2.imread(image_path)
-
-#         # Vérifier si l'image a été correctement chargée
-#         if image is None:
-#             print(f"Erreur : Impossible de charger l'image {file_name}.")
-#             continue
-
-#         # Appliquer le découpage d'image pour détecter les visages
-#         faces, annotated_image = dlib_cut(image)
-
-#         if faces:
-#             for i, (cropped_face, (x, y, w, h)) in enumerate(faces):
-#                 # Effectuer la reconnaissance faciale
-#                 recognized_name, is_recognized = recognize_image(cropped_face, database)
-
-#                 if is_recognized:
-#                     # Créer le dossier pour la personne reconnue s'il n'existe pas
-#                     person_folder = os.path.join(output_folder, recognized_name)
-#                     os.makedirs(person_folder, exist_ok=True)
-
-#                     # Ajouter le texte (nom reconnu) sur l'image annotée
-#                     cv2.putText(
-#                         annotated_image, recognized_name, (x, y - 10),
-#                         fontFace=cv2.FONT_HERSHEY_SIMPLEX, fontScale=0.7,
-#                         color=(255, 0, 0), thickness=2
-#                     )
-#                     # Dessiner un rectangle autour du visage
-#                     # cv2.rectangle(annotated_image, (x, y), (x + w, y + h), (0, 255, 0), 2)
-
-#                     # Sauvegarder l'image annotée dans le dossier de la personne reconnue
-#                     output_path = os.path.join(person_folder, f"{file_name.split('.')[0]}_face{i}.jpg")
-#                     cv2.imwrite(output_path, annotated_image)
-
-#                     print(f"Visage reconnu : {recognized_name}, image sauvegardée dans {output_path}")
-#                 else:
-#                     # Enregistrer l'image non reconnue dans le dossier "Autres"
-#                     output_path = os.path.join(unknown_folder, f"{file_name.split('.')[0]}_face{i}.jpg")
-#                     cv2.imwrite(output_path, cropped_face)
-#                     print(f"Aucun visage correspondant trouvé pour {file_name}, visage sauvegardé dans 'Autres'.")
-#         else:
-#             # Enregistrer l'image sans visages détectés dans le dossier "Autres"
-#             output_path = os.path.join(unknown_folder, file_name)
-#             cv2.imwrite(output_path, image)
-#             print(f"Aucun visage détecté dans {file_name}, image sauvegardée dans 'Autres'.")
-
-# # Configuration des dossiers
-# test_folder = "Test"  # Dossier contenant les images à tester
-# output_folder = "RecognizedFaces"  # Dossier de sortie pour les images reconnues
-# database_folder = "FaceDataBase_cut80"  # Dossier contenant la base de données des visages
-
-# # Appel de la fonction principale
-# process_test_folder(test_folder, output_folder, database_folder)
+# Lancer l'application
+if __name__ == "__main__":
+    MainApp().run()
