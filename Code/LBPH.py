@@ -53,41 +53,42 @@ def ORL():
             )
 
 if __name__ == "__main__":
-    list_class = os.listdir("../Database/FaceExtracted")
+    images = os.listdir("./CroppedImagesDlib")
 
-    faces = []
+    faces=[]
+    facesForId = []
     ids = []
-    for i in range(len(list_class)):
-        image_path = f"../Database/FaceExtracted/{list_class[i]}/"
-        list_img = os.listdir(image_path)
-        print(list_img)
-        for j in range(1):
-            if os.path.exists(image_path + list_img[0]):
-                img = cv2.imread(image_path + list_img[0], cv2.IMREAD_GRAYSCALE)
-                if img is not None:
-                    img = preprocess_image(img)
-                    faces.append(img)
-                    ids.append(i)
+    for i in range(len(images)):
+        data_class = images[i].split("_")[0]
+        if (not data_class in facesForId):
+            facesForId.append(data_class)
+        index = facesForId.index(data_class)
+        ids.append(index)
+        img = cv2.imread("./CroppedImagesDlib/"+images[i], cv2.IMREAD_GRAYSCALE)
+        img = preprocess_image(img)
+        faces.append(img)
     ids = np.array(ids, dtype='int32')
     lbph_classifier = cv2.face.LBPHFaceRecognizer_create()
 
     # Entraîner le modèle
     lbph_classifier.train(faces, ids)
 
-    t = 0
-    f = 0
-    for i in range(len(list_class)):
-        image_path = f"../Database/FaceExtracted/{list_class[i]}/"
-        list_img = os.listdir(image_path)
-        print(list_img)
-        for j in range(2,4):
-            if os.path.exists(image_path + list_img[0]):
-                img = cv2.imread(image_path + list_img[0], cv2.IMREAD_GRAYSCALE)
-                if img is not None:
-                    img = preprocess_image(img)
-                    label, confidence = lbph_classifier.predict(img)
-                    t += int(label == i)
-                    f += int(label != i)
+    print(type(lbph_classifier))
+
+    # t = 0
+    # f = 0
+    # for i in range(len(list_class)):
+    #     image_path = f"../Database/FaceExtracted/{list_class[i]}/"
+    #     list_img = os.listdir(image_path)
+    #     print(list_img)
+    #     for j in range(2,4):
+    #         if os.path.exists(image_path + list_img[0]):
+    #             img = cv2.imread(image_path + list_img[0], cv2.IMREAD_GRAYSCALE)
+    #             if img is not None:
+    #                 img = preprocess_image(img)
+    #                 label, confidence = lbph_classifier.predict(img)
+    #                 t += int(label == i)
+    #                 f += int(label != i)
                     
-    print("True: ", t, "\nFalse: ", f)
+    # print("True: ", t, "\nFalse: ", f)
                     

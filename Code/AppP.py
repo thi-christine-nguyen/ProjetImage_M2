@@ -1,14 +1,17 @@
 from kivy.app import App
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
 from kivy.uix.button import Button
 from kivy.uix.slider import Slider
 from kivy.uix.label import Label
 from kivy.uix.widget import Widget
-from kivy.clock import Clock
-import cv2
-from kivy.graphics.texture import Texture
+from kivy.uix.checkbox import CheckBox
 from kivy.uix.image import Image
+from kivy.graphics.texture import Texture
+from kivy.clock import Clock
 
+import os
+import cv2
 import numpy as np
 import dlib
 from keras.models import load_model
@@ -163,7 +166,7 @@ def load_database(file_path="database.pkl"):
 
 def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_folder="CroppedImagesDlib"):
     # Démarrer le chronomètre
-    start_time = time.time()
+    #start_time = time.time()
     database = {}
 
     # Créer le dossier pour enregistrer les images découpées si nécessaire
@@ -208,8 +211,8 @@ def generate_database(folder_img="FaceDataBase", save_cropped_images=True, save_
                     print(f"Erreur avec l'image {img_path}: {e}")
 
     # Calculer le temps écoulé
-    elapsed_time = time.time() - start_time
-    print(f"Temps écoulé pour générer la base de données : {elapsed_time:.2f} secondes.")
+    #elapsed_time = time.time() - start_time
+    #print(f"Temps écoulé pour générer la base de données : {elapsed_time:.2f} secondes.")
 
     return database
 
@@ -234,7 +237,7 @@ def find_closest_angle(img, database, min_detection=0.3):
                 dmin = dcos_1_2
                 umin = person
     
-    if dmin > min_detection:
+    if dmin > detection_threshold:
         umin = "Inconnu"
     
     return umin, dmin
@@ -287,16 +290,33 @@ class MainApp(App):
 
         # Layouts secondaires
         imageLayout = BoxLayout(orientation="horizontal")
-        buttonLayout = BoxLayout(orientation="vertical", size_hint=(0.2,1))
+        buttonLayout = BoxLayout(orientation="vertical",size_hint=(0.2,0.9))
+        decoupeLayout = GridLayout(cols=2)
+        detectLayout = GridLayout(cols=2)
         tresholdLayout = BoxLayout(orientation="vertical", size_hint=(1,0.1))
 
         # Affichage vidéo
-        self.video = Image()
+        self.video = Image(size_hint=(0.6,0.9))
+
+        decoupe_label = Label(text="Detection\nde visage")
+        dlib_label = Label(text="Dlib \nCut")
+        haar_label = Label(text="Haar \nCascade")
+        dlib_check = CheckBox(active=True, group="decoupe")
+        dlib_check.bind(active=lambda _,__: self.set_decoupe_method("dlib_cut"))
+        haar_check = CheckBox(active=False, group="decoupe")
+        haar_check.bind(active=lambda _,__: self.set_decoupe_method("haar"))
+
+        detect_label = Label(text="Reconnaissance\nde visage")
+        vggFace_label = Label(text="VggFaces")
+        # lbph_label = Label(text="Haar Cascade")
+        vggFace_check = CheckBox(active=True, group="detect")
+        # lbph_check = CheckBox(active=False, group="detect")
 
         # Boutons pour choisir la méthode
-        btn_dlib = Button(text="Dlib Cut", on_press=lambda x: self.set_method("dlib_cut"))
-        btn_haar = Button(text="Haar Cascade", on_press=lambda x: self.set_method("haar"))
+        # btn_dlib = Button(text="Dlib Cut", on_press=lambda x: self.set_method("dlib_cut"))
+        # btn_haar = Button(text="Haar Cascade", on_press=lambda x: self.set_method("haar"))
 
+        self.desc_label = Label(text="", size_hint=(0.2,0.9))
         # Curseur pour ajuster le seuil
         self.threshold_label = Label(text=f"Seuil: {detection_threshold:.2f}")
         self.threshold_slider = Slider(min=0.1, max=1.0, value=detection_threshold, step=0.01)
@@ -306,11 +326,25 @@ class MainApp(App):
         tresholdLayout.add_widget(self.threshold_label)
         tresholdLayout.add_widget(self.threshold_slider)
 
-        buttonLayout.add_widget(btn_dlib)
-        buttonLayout.add_widget(btn_haar)
+    
+        buttonLayout.add_widget(decoupe_label)
+        decoupeLayout.add_widget(dlib_label)
+        decoupeLayout.add_widget(dlib_check)
+        decoupeLayout.add_widget(haar_label)
+        decoupeLayout.add_widget(haar_check)
+        buttonLayout.add_widget(decoupeLayout)
+        buttonLayout.add_widget(detect_label)
+        detectLayout.add_widget(vggFace_label)
+        detectLayout.add_widget(vggFace_check)
+        # detectLayout.add_widget(lbph_label)
+        # detectLayout.add_widget(lbph_check)
+        buttonLayout.add_widget(detectLayout)
+        # buttonLayout.add_widget(btn_dlib)
+        # buttonLayout.add_widget(btn_haar)
 
         imageLayout.add_widget(buttonLayout)
         imageLayout.add_widget(self.video)
+        imageLayout.add_widget(self.desc_label)
 
         # Ajouter les sous-layouts dans le layout principal
         layout.add_widget(imageLayout)
@@ -324,9 +358,9 @@ class MainApp(App):
 
         return layout
 
-    def set_method(self, method):
-        global current_method
-        current_method = method
+    def set_decoupe_method(self, method):
+        global current_decoupe_method
+        current_decoupe_method = method
 
     def update_threshold(self, instance, value):
         global detection_threshold
@@ -339,7 +373,7 @@ class MainApp(App):
             frame = cv2.flip(frame, 1)  # Miroir pour une meilleure expérience utilisateur
             self.frame_counter += 1
 
-            if self.frame_counter >= 10:
+            if self.frame_counter >= 5:
                 self.frame_counter = 0  # Réinitialiser le compteur
 
                 # Réaliser le traitement des visages toutes les 10 frames
@@ -355,6 +389,10 @@ class MainApp(App):
             # Annoter les résultats à chaque frame avec les données précédemment détectées
             for cropped_face, (x, y, w, h) in self.detected_faces:
                 name, _ = recognize_image(cropped_face, db)
+                try:
+                    self.desc_label.text = name + "\n" + data_info[name]
+                except:
+                    self.desc_label.text = "no data found"
                 cv2.putText(frame, name, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 0), 2)
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
 
@@ -368,28 +406,40 @@ class MainApp(App):
         self.capture.release()
 
 
-# Initialisation des modèles et base de données
-
-facemodel = vgg_face_blank()
-data = loadmat('vgg-face.mat', matlab_compatible=False, struct_as_record=False)
-l = data['layers']
-description = data['meta'][0,0].classes[0,0].description
-
-copy_mat_to_keras(facemodel)
-featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[-2].output)
-
-# featuremodel = get_feature_model()
-# db = generate_database()
-database_path = "database.pkl"
-db = load_database(database_path)
-
-# Si la base de données est vide, la générer
-if not db:
-    db = generate_database()
-    # Sauvegarder la base de données générée
-    save_database(db, database_path)
-
-
 # Lancer l'application
 if __name__ == "__main__":
+    data_info = {
+        "Adam":"Le nouveau",
+        "Arthur":"Le barbu",
+        "Benjamin":"Un compétiteur",
+        "Brian":"Un blond",
+        "Emmanuel":"Un grand fournisseur de photo",
+        "JB":"Le J!",
+        "JL":"Le J!",
+        "Loic":"Le violoniste",
+        "Mathieu":"Un Blond",
+        "Mickael":"Un grand fournisseur de photo",
+        "Oren":"Le barde",
+        "Pierre":"Le créateur",
+        "Renaud":"Un compétiteur",
+        "Thi":"La créatrice"
+    }
+    # Initialisation des modèles et base de données
+    facemodel = vgg_face_blank()
+    data = loadmat('vgg-face.mat', matlab_compatible=False, struct_as_record=False)
+    l = data['layers']
+    description = data['meta'][0,0].classes[0,0].description
+
+    copy_mat_to_keras(facemodel)
+    featuremodel = Model(inputs=facemodel.layers[0].input, outputs=facemodel.layers[-2].output)
+
+    # featuremodel = get_feature_model()
+    # db = generate_database()
+    database_path = "database.pkl"
+    db = load_database(database_path)
+    # Si la base de données est vide, la générer
+    if not db:
+        db = generate_database()
+        # Sauvegarder la base de données générée
+        save_database(db, database_path)
     MainApp().run()
