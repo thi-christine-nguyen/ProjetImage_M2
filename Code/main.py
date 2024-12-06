@@ -304,7 +304,7 @@ def main(database):
                 # Affichage du nom de la personne identifiée
                 cv2.putText(img = frame, text = name, org = (int(x),int(y+h+20)), fontFace = cv2.FONT_HERSHEY_SIMPLEX, thickness=2, fontScale=1, color=(0, 255, 0))
             
-            key = cv2.waitKey(100)
+            key = cv2.waitKey(1)
             cv2.imshow("preview", img)
 
             if key == 27: # quitter avec la touche ESC
