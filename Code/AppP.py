@@ -25,7 +25,7 @@ from scipy.io import loadmat
 import pickle
 
 # Variables globales
-current_method = "dlib_cut"
+current_decoupe_method = "dlib_cut"
 detection_threshold = 0.3
 
 # Initialisation des modèles Dlib
@@ -377,9 +377,9 @@ class MainApp(App):
                 self.frame_counter = 0  # Réinitialiser le compteur
 
                 # Réaliser le traitement des visages toutes les 10 frames
-                if current_method == "dlib_cut":
+                if current_decoupe_method == "dlib_cut":
                     faces, _ = dlib_cut(frame)
-                elif current_method == "haar":
+                elif current_decoupe_method == "haar":
                     faces, _ = haar(frame)
                 else:
                     faces = []
